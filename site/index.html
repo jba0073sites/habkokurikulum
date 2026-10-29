@@ -1525,6 +1525,7 @@ main.addEventListener('click', e=>{
   if(t.closest('[data-jmsave]')){ jemputSave(); return; }
   const sg=t.closest('[data-saguess]'); if(sg){ const sel=document.querySelector(`[data-said="${CSS.escape(sg.dataset.saguess)}"][data-saf="guru"]`); if(sel){ sel.value=sg.dataset.nm; sel.dispatchEvent(new Event('change',{bubbles:true})); } sg.remove(); return; }
   const sbk=t.closest('[data-sandaran]'); if(sbk){ sandaranPenuh(sbk); return; }
+  const ujf=t.closest('[data-ujifail]'); if(ujf){ ujiStoranFail(ujf); return; }
   const stk=t.closest('[data-stk]'); if(stk){ state.stk=stk.dataset.stk; render(); return; }
   if(t.closest('[data-stsave]')||t.closest('[data-streset]')){ const kd=state.stk||'lantik'; const all={...(cfg().suratTeks||{})};
     if(t.closest('[data-streset]')){ delete all[kd]; saveCfg({suratTeks:all}).then(()=>render()); return; }
@@ -2490,7 +2491,8 @@ async function shrink(file){
 }
 function assetErr(e){
   const c = e&&e.code;
-  return c==='too_large'?(IS_SA?'Fail melebihi 4 MB. Kecilkan atau pecahkan fail dahulu.':'Fail melebihi 20 MB.') : c==='unsupported_type'?'Jenis fail tidak disokong. Gunakan JPG, PNG atau PDF.' : c==='quota_or_state'?'Ruang storan fail penuh.' : c==='not_granted'?'Akaun anda tidak dibenarkan memuat naik.' : c==='rate_limited'?'Terlalu banyak muat naik. Cuba sebentar lagi.' : 'Muat naik gagal. Cuba lagi.';
+  const d = e&&e.detail ? ' '+e.detail : '';
+  return c==='too_large'?(IS_SA?'Fail melebihi 4 MB. Kecilkan atau pecahkan fail dahulu.':'Fail melebihi 20 MB.') : c==='unsupported_type'?'Jenis fail tidak disokong. Gunakan JPG, PNG atau PDF.' : c==='quota_or_state'?'Ruang storan fail penuh.' : c==='no_function'?('Muat naik gagal.'+d) : c==='not_granted'?('Akaun anda tidak dibenarkan memuat naik.'+d) : c==='rate_limited'?'Terlalu banyak muat naik. Cuba sebentar lagi.' : c==='network'?'Muat naik gagal: tiada sambungan.' : ('Muat naik gagal.'+d+' Gunakan "Uji storan fail" dalam Tetapan → Import & eksport.');
 }
 function initLampiran(form, initial, ed){
   let list = (initial||[]).map(x=>({...x}));
@@ -3936,7 +3938,7 @@ function renderData(){
   return `
   <section class="panel glass" style="--hue:var(${s.hue})"><h3>Sandaran penuh <span class="sub">${IS_SA?'pulihkan data daripada hab lama':'untuk pindah ke laman sendiri (Netlify)'}</span></h3>
     <p class="sub" style="margin:0 0 10px">Satu fail ZIP mengandungi <b>semua</b> data (semua tahun, tetapan, olahraga, PAJSK) dan semua fail yang dimuat naik (lencana, banner, surat, gambar laporan, latar sijil).</p>
-    <div class="toolbar" style="gap:8px">${state.dl?`<button class="btn btn-main btn-sm" data-sandaran>${svg('down')}Muat turun sandaran penuh (ZIP)</button>`:''}${IS_SA?`<span class="btn btn-ghost btn-sm upbtn">${svg('up')}Pulihkan daripada sandaran penuh (ZIP)<input type="file" id="pulihzip" accept=".zip,application/zip"></span>`:''}</div>
+    <div class="toolbar" style="gap:8px">${state.dl?`<button class="btn btn-main btn-sm" data-sandaran>${svg('down')}Muat turun sandaran penuh (ZIP)</button>`:''}${IS_SA?`<span class="btn btn-ghost btn-sm upbtn">${svg('up')}Pulihkan daripada sandaran penuh (ZIP)<input type="file" id="pulihzip" accept=".zip,application/zip"></span><button class="btn btn-ghost btn-sm" data-ujifail>Uji storan fail</button>`:''}</div>
     ${IS_SA?'<p class="hint" style="margin:6px 0 0">Pemulihan menulis semula data dengan ID yang sama. Gunakan sekali sahaja semasa pemindahan, sebelum guru mula mengisi data baharu.</p>':''}<p class="sub" id="pulihstat" style="margin:6px 0 0"></p>
   </section>
   <section class="panel glass" style="--hue:var(${s.hue})"><h3>1. Muat turun data tahunan</h3>
@@ -4920,6 +4922,22 @@ async function sandaranPenuh(btn){ if(!state.isAdmin){ toast('Untuk pentadbir sa
     await saveFile(`Sandaran-Penuh-${slug(cfg().sekolah||'hab')}-${todayStr()}.zip`, blob);
     toast(`Sandaran penuh: ${Object.values(data.koleksi).reduce((a,x)=>a+x.length,0)} dokumen, ${Object.keys(meta).length} fail${gagal?`, ${gagal} fail gagal`:''}`); }
   catch(e){ console.error(e); toast('Sandaran tidak dapat disediakan'+(e&&(e.code||e.message)?` (${e.code||e.message})`:'')+'. Cuba lagi.'); } finally{ btn.disabled=false; btn.innerHTML=old; } }
+async function ujiStoranFail(btn){ const out=$('pulihstat'); const say=t=>{ if(out) out.innerHTML=t; }; const old=btn.textContent; btn.disabled=true; btn.textContent='Menguji…';
+  try{
+    const d = window.KOKO_FAIL_SEMAK ? await window.KOKO_FAIL_SEMAK() : null;
+    const L=[];
+    if(!d) L.push('Fungsi semakan tidak tersedia. Kemas kini fail <b>koko-shim.js</b> di GitHub.');
+    else if(d.status!==200) L.push(d.status===404 ? 'Fungsi storan fail <b>tidak dijumpai</b>. Pastikan folder <b>netlify/</b> dan fail <b>netlify.toml</b> dimuat naik ke GitHub, dan laman telah diterbitkan semula.' : `Pelayan memulangkan ralat <b>${esc(String(d.status||'?'))}</b>. ${esc(d.badan||d.mesej||d.ralat||'')}`);
+    else {
+      L.push(`Log masuk dikenali: <b>${d.login?'Ya':'Tidak'}</b>${d.emel?` (${esc(d.emel)})`:''}`);
+      L.push(`Boleh memuat naik: <b>${d.bolehTulis?'Ya':'Tidak'}</b>${d.pentadbir?' · pentadbir':''}`);
+      L.push(`Storan fail: <b>${d.storan==='ok'?'Berfungsi':'Gagal'}</b>${d.mesej?` — ${esc(String(d.mesej).slice(0,160))}`:''}`);
+      if(d.sebab) L.push(`Nota: ${esc(d.sebab)}`);
+      if(d.login&&d.bolehTulis&&d.storan==='ok') L.push('<b>Semua baik.</b> Muat naik fail sepatutnya berjaya.');
+    }
+    say(L.join('<br>'));
+  }catch(e){ say('Ujian gagal: '+esc(String(e&&e.message||e))); }
+  finally{ btn.disabled=false; btn.textContent=old; } }
 async function pulihPenuh(file, out){ if(!IS_SA||!state.isAdmin) return; const say=t=>{ if(out) out.textContent=t; };
   try{ await loadJSZip(); const zip=await window.JSZip.loadAsync(file); const data=JSON.parse(await zip.file('data.json').async('string')); const fs=window.KOKO_FS;
     const files=Object.entries(data.fail||{}); let i=0; for(const [id,type] of files){ say(`Memuat naik fail ${++i}/${files.length}…`); const f=zip.file('fail/'+id); if(f){ const b=await f.async('blob'); await window.KOKO_BLOB_PUT(id, b, type); } }

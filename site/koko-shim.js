@@ -164,14 +164,31 @@
 
     async function blobReq(method, path, body, type) {
       const h = { authorization: 'Bearer ' + await token() }; if (type) h['content-type'] = type;
-      let r; try { r = await fetch(path, { method, headers: h, body }); } catch (e) { throw { code: 'network' }; }
-      if (r.status === 413) throw { code: 'too_large' };
-      if (r.status === 401 || r.status === 403) throw { code: 'not_granted' };
-      if (r.status === 429) throw { code: 'rate_limited' };
-      if (!r.ok) throw { code: 'upload_failed', status: r.status };
-      return r.json();
+      let r;
+      try { r = await fetch(path, { method, headers: h, body }); }
+      catch (e) { throw { code: 'network', detail: 'Tiada sambungan ke pelayan laman.' }; }
+      if (r.ok) { try { return await r.json(); } catch (e) { throw { code: 'upload_failed', detail: 'Jawapan pelayan tidak difahami.' }; } }
+      let body2 = ''; try { body2 = (await r.text()).slice(0, 300); } catch (e) {}
+      let j = null; try { j = JSON.parse(body2); } catch (e) {}
+      const sebab = (j && (j.sebab || j.mesej)) || '';
+      // Fungsi storan tidak dipasang: Netlify memulangkan halaman HTML 404 dan bukan JSON.
+      if (r.status === 404 && !j) throw { code: 'no_function', detail: 'Fungsi storan fail tidak dijumpai di laman ini. Pastikan folder netlify/ dimuat naik ke GitHub dan laman diterbitkan semula.' };
+      if (r.status === 413) throw { code: 'too_large', detail: sebab };
+      if (r.status === 401 || r.status === 403) throw { code: 'not_granted', detail: sebab };
+      if (r.status === 429) throw { code: 'rate_limited', detail: sebab };
+      throw { code: 'upload_failed', status: r.status, detail: sebab || `Ralat pelayan ${r.status}.` };
     }
-    window.KOKO_BLOB_PUT = (id, blob, type) => blobReq('PUT', '/_blob/' + id, blob, type || blob.type || 'application/octet-stream');
+    window.KOKO_BLOB_PUT = (id, blob, type) => blobReq('PUT', '/_fail/' + id, blob, type || blob.type || 'application/octet-stream');
+    window.KOKO_FAIL_SEMAK = async () => {
+      const out = { endpoint: '/_fail/semak' };
+      try {
+        const r = await fetch('/_fail/semak', { headers: { authorization: 'Bearer ' + await token() } });
+        out.status = r.status;
+        const t = await r.text();
+        try { Object.assign(out, JSON.parse(t)); } catch (e) { out.badan = t.slice(0, 200); }
+      } catch (e) { out.ralat = String(e && e.message || e); }
+      return out;
+    };
 
     let profCache = null;
     async function allProfiles() {
@@ -201,8 +218,8 @@
         }
       },
       assets: canWrite ? {
-        upload: async (blob, opt) => blobReq('POST', '/_blob/', blob, (opt && opt.type) || blob.type || 'application/octet-stream'),
-        delete: async id => { if (/^[0-9a-f]{32}$/.test(String(id))) await blobReq('DELETE', '/_blob/' + id); }
+        upload: async (blob, opt) => blobReq('POST', '/_fail', blob, (opt && opt.type) || blob.type || 'application/octet-stream'),
+        delete: async id => { if (/^[0-9a-f]{32}$/.test(String(id))) await blobReq('DELETE', '/_fail/' + id); }
       } : null,
       sample: null
     };
