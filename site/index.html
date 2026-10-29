@@ -4923,9 +4923,9 @@ async function sandaranPenuh(btn){ if(!state.isAdmin){ toast('Untuk pentadbir sa
 async function pulihPenuh(file, out){ if(!IS_SA||!state.isAdmin) return; const say=t=>{ if(out) out.textContent=t; };
   try{ await loadJSZip(); const zip=await window.JSZip.loadAsync(file); const data=JSON.parse(await zip.file('data.json').async('string')); const fs=window.KOKO_FS;
     const files=Object.entries(data.fail||{}); let i=0; for(const [id,type] of files){ say(`Memuat naik fail ${++i}/${files.length}…`); const f=zip.file('fail/'+id); if(f){ const b=await f.async('blob'); await window.KOKO_BLOB_PUT(id, b, type); } }
-    let n=0; const all=Object.entries(data.koleksi).flatMap(([c,docs])=>docs.map(d=>({c,d}))); for(let j=0;j<all.length;j+=400){ const bt=fs.batch(); all.slice(j,j+400).forEach(({c,d})=>{ if(c==='config'&&d.id!=='app') return; bt.set(fs.collection(c).doc(d.id), d.data); }); await bt.commit(); n=Math.min(all.length,j+400); say(`Menulis data ${n}/${all.length}…`); }
+    let n=0; const all=Object.entries(data.koleksi).flatMap(([c,docs])=>docs.map(d=>({c,d}))); const B=10; for(let j=0;j<all.length;j+=B){ const part=all.slice(j,j+B).filter(({c,d})=>!(c==='config'&&d.id!=='app')); const bt=fs.batch(); part.forEach(({c,d})=>bt.set(fs.collection(c).doc(d.id), d.data)); try{ await bt.commit(); }catch(err){ const c0=[...new Set(part.map(x=>x.c))].join(', '); throw new Error(`${err&&err.code==='permission-denied'?'Firestore menolak penulisan':'Gagal menulis'} (${c0}). ${err&&err.code==='permission-denied'?'Semak peraturan Firestore dan e-mel pentadbir.':(err&&err.message||'')}`); } n=Math.min(all.length,j+B); say(`Menulis data ${n}/${all.length}…`); }
     say(`Selesai: ${all.length} dokumen dan ${files.length} fail dipulihkan. Muat semula halaman.`); toast(`Pemulihan selesai: ${all.length} dokumen, ${files.length} fail`); }
-  catch(e){ console.error(e); say('Pemulihan gagal: '+(e&&e.message||e)); } }
+  catch(e){ console.error(e); say('Pemulihan gagal: '+(e&&(e.message||(e.code==='not_granted'?'muat naik fail ditolak (semak status pentadbir)':e.code))||e)); } }
 
 
 /* Akses dalam versi laman sendiri: kelulusan pengguna & jemputan e-mel */

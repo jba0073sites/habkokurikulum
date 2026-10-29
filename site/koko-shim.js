@@ -107,7 +107,7 @@
           const why = code === 'permission-denied'
             ? 'Peraturan Firestore menolak akaun ini. Pastikan peraturan daripada fail <b>firestore.rules</b> telah ditampal sepenuhnya dan ditekan <b>Publish</b> (panduan langkah 4), dan <b>projectId</b> dalam koko-config.json sama dengan projek Firebase tersebut.'
             : code === 'unavailable' || /offline/i.test(e && e.message)
-              ? 'Pelayar tidak dapat berhubung dengan Firestore. Cuba rangkaian lain (contohnya data telefon), matikan sambungan (extension) penyekat iklan, atau buka dalam tetingkap Incognito.'
+              ? 'Pelayar tidak dapat berhubung dengan Firestore. Sebab paling biasa: pangkalan data Firestore bukan bernama <b>(default)</b>, atau belum dicipta. Semak di Firebase → Firestore Database. Jika masih gagal, cuba rangkaian lain atau tetingkap Incognito.'
               : code === 'not-found' || /database .* does not exist/i.test(e && e.message)
                 ? 'Pangkalan data Firestore belum dicipta dalam projek ini (panduan langkah 2, bahagian 4).'
                 : 'Semak sambungan internet dan peraturan Firestore (panduan langkah 4).';
@@ -129,6 +129,16 @@
           if (String(d.lastSeen || '').slice(0, 10) !== day) ref.update({ lastSeen: now, nama: u.displayName || d.nama || '', foto: u.photoURL || '' }).catch(() => {});
         }
         const ok = isBoot || d.status === 'lulus';
+        if (ok) {
+          // Semak bahawa peraturan Firestore benar-benar membenarkan akaun ini membaca data.
+          let probe = null; try { await fs.doc('config/app').get(); } catch (e) { probe = e; }
+          if (probe && /permission/i.test(String(probe.code || probe.message))) {
+            const g = show(`<h1>Akses ditolak oleh Firestore</h1><p class="ks">Akaun <b>${esc(u.email)}</b> ${isBoot ? 'disenaraikan sebagai pentadbir dalam <b>koko-config.json</b>, tetapi peraturan Firestore tidak mengenalinya.' : 'diluluskan, tetapi peraturan Firestore menolaknya.'}</p>
+              <p class="ks" style="text-align:left">Semak di Firebase → Firestore Database → <b>Rules</b>:<br>1. Peraturan daripada <b>firestore.rules</b> sudah ditampal dan di-<b>Publish</b> dalam projek <b>${esc(C.firebase.projectId)}</b>.<br>2. Baris <b>pentadbirAsal()</b> mengandungi e-mel yang sama tepat: <b>${esc(email)}</b>.</p>
+              <button class="kb" id="kretry">Cuba lagi</button><button class="kg" id="kout">Log keluar</button>`);
+            g.querySelector('#kretry').onclick = () => location.reload(); outBtn(g); return;
+          }
+        }
         if (!ok) {
           const ditolak = d.status === 'ditolak';
           const g = show(`<h1>${ditolak ? 'Akses ditolak' : 'Menunggu kelulusan'}</h1>
